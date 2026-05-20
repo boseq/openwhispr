@@ -113,7 +113,6 @@ async function postMultipart(url, body, boundary, headers = {}) {
     method: "POST",
     headers: {
       "Content-Type": `multipart/form-data; boundary=${boundary}`,
-      "Content-Length": String(body.length),
       ...headers,
     },
     body,

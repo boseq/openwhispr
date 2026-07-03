@@ -223,6 +223,9 @@ interface TranscriptionSectionProps {
   }) => void;
 }
 
+// Providers that forward the live-preview flag (see STREAMING_PROVIDERS in audioManager.js).
+const CLOUD_PREVIEW_PROVIDERS = new Set(["tinfoil"]);
+
 function TranscriptionSection({
   isSignedIn,
   startOnboarding,
@@ -366,7 +369,12 @@ function TranscriptionSection({
         onSelect={handleTranscriptionModeSelect}
       />
 
-      {transcriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+      {transcriptionMode === "providers" && (
+        <>
+          {renderTranscriptionPicker("cloud")}
+          {CLOUD_PREVIEW_PROVIDERS.has(cloudTranscriptionProvider) && renderPreviewToggle()}
+        </>
+      )}
       {transcriptionMode === "local" && (
         <>
           {renderTranscriptionPicker("local")}

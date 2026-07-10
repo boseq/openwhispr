@@ -17,6 +17,7 @@ const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
 const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
+const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const AudioStorageManager = require("./audioStorage");
 
 // Tinfoil's only realtime STT model — fallback when the renderer omits one.
@@ -824,8 +825,6 @@ class IPCHandlers {
       return this.windowManager.resizeMainWindow(sizeKey);
     });
 
-    // Uniform BYOK key channels (get-<base>-key / save-<base>-key) from the
-    // shared manifest — adding a provider needs no handler here.
     for (const k of BYOK_API_KEYS) {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
       ipcMain.handle(`save-${k.base}-key`, (event, key) => this.environmentManager[k.save](key));
@@ -2750,6 +2749,27 @@ class IPCHandlers {
       return getTinfoilChatModels();
     });
 
+    // Enclave attestation is Node-only, so batch transcription is proxied through main.
+    ipcMain.handle(
+      "proxy-tinfoil-transcription",
+      async (event, { audioBuffer, language, prompt }) => {
+        try {
+          return await transcribeWithTinfoil({
+            audioBuffer: Buffer.from(audioBuffer),
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+            language,
+            prompt,
+            apiKey: this.environmentManager.getTinfoilKey(),
+          });
+        } catch (error) {
+          // ipcMain.handle keeps only the message when a promise rejects, dropping
+          // custom props — return the code so the renderer can rebuild the error.
+          return { error: error.message, code: error.code, messageKey: error.messageKey };
+        }
+      }
+    );
+
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -3985,6 +4005,16 @@ class IPCHandlers {
               }
             }
           }
+        } else if (settings?.cloudTranscriptionProvider === "tinfoil") {
+          // Attested transport, so this can't reuse the generic fetch below.
+          const { text, model } = await transcribeWithTinfoil({
+            audioBuffer: buffer,
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+            language,
+            apiKey: this.environmentManager.getTinfoilKey(),
+          });
+          if (text) result = { text, source: "tinfoil", model };
         } else {
           const provider = settings?.cloudTranscriptionProvider || "openai";
           const model = this._resolveByokModel(provider, settings?.cloudTranscriptionModel);
@@ -6851,6 +6881,18 @@ class IPCHandlers {
               clientSecret,
               audioBuffer: fs.readFileSync(filePath),
               language: language || "en",
+            });
+            return { success: true, text };
+          }
+
+          if (provider === "tinfoil") {
+            const ext = path.extname(filePath).toLowerCase().replace(".", "");
+            const { text } = await transcribeWithTinfoil({
+              audioBuffer: fs.readFileSync(filePath),
+              fileName: path.basename(filePath),
+              contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
+              language,
+              apiKey: this.environmentManager.getTinfoilKey(),
             });
             return { success: true, text };
           }

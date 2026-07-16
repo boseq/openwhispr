@@ -1467,7 +1467,9 @@
         "title": "起動設定",
         "description": "OpenWhispr の起動時の動作を制御",
         "startMinimized": "最小化で起動",
-        "startMinimizedDescription": "コントロールパネルウィンドウを表示せずに起動"
+        "startMinimizedDescription": "コントロールパネルウィンドウを表示せずに起動",
+        "showDockIcon": "Dock アイコンを表示",
+        "showDockIconDescription": "OpenWhispr を Dock に表示します。オフにするとメニューバーのみで動作します。"
       },
       "waylandPaste": {
         "title": "Wayland 貼り付け設定",

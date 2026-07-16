@@ -1640,7 +1640,9 @@
         "title": "Startup",
         "description": "Control how OpenWhispr behaves when it launches",
         "startMinimized": "Start minimized",
-        "startMinimizedDescription": "Launch without showing the control panel window"
+        "startMinimizedDescription": "Launch without showing the control panel window",
+        "showDockIcon": "Show Dock icon",
+        "showDockIconDescription": "Keep OpenWhispr in the Dock. Turn off to run from the menu bar only."
       },
       "waylandPaste": {
         "title": "Wayland Paste Setup",

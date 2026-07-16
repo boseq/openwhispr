@@ -43,6 +43,7 @@ const PERSISTED_KEYS = [
   "FLOATING_ICON_AUTO_HIDE",
   "PANEL_START_POSITION",
   "START_MINIMIZED",
+  "SHOW_DOCK_ICON",
   "UI_LANGUAGE",
   "WHISPER_CUDA_ENABLED",
   "WHISPER_VULKAN_ENABLED",
@@ -460,6 +461,17 @@ class EnvironmentManager {
 
   saveStartMinimized(enabled) {
     const result = this._saveKey("START_MINIMIZED", String(enabled));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  // macOS only. Defaults to true so existing installs keep their Dock icon.
+  getShowDockIcon() {
+    return this._getKey("SHOW_DOCK_ICON") !== "false";
+  }
+
+  saveShowDockIcon(enabled) {
+    const result = this._saveKey("SHOW_DOCK_ICON", String(enabled));
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

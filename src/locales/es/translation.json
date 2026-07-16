@@ -1515,7 +1515,9 @@
         "title": "Inicio",
         "description": "Controla el comportamiento de OpenWhispr al iniciar",
         "startMinimized": "Iniciar minimizado",
-        "startMinimizedDescription": "Iniciar sin mostrar la ventana del panel de control"
+        "startMinimizedDescription": "Iniciar sin mostrar la ventana del panel de control",
+        "showDockIcon": "Mostrar icono en el Dock",
+        "showDockIconDescription": "Mantener OpenWhispr en el Dock. Desactívalo para usarlo solo desde la barra de menús."
       },
       "waylandPaste": {
         "title": "Configuración de pegado en Wayland",

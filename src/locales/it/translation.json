@@ -1467,7 +1467,9 @@
         "title": "Avvio",
         "description": "Controlla il comportamento di OpenWhispr all'avvio",
         "startMinimized": "Avvia ridotto a icona",
-        "startMinimizedDescription": "Avvia senza mostrare la finestra del pannello di controllo"
+        "startMinimizedDescription": "Avvia senza mostrare la finestra del pannello di controllo",
+        "showDockIcon": "Mostra icona nel Dock",
+        "showDockIconDescription": "Mantieni OpenWhispr nel Dock. Disattiva per usarlo solo dalla barra dei menu."
       },
       "waylandPaste": {
         "title": "Configurazione incolla su Wayland",

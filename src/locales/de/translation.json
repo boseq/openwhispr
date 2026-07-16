@@ -1467,7 +1467,9 @@
         "title": "Autostart",
         "description": "Steuern Sie das Verhalten von OpenWhispr beim Start",
         "startMinimized": "Minimiert starten",
-        "startMinimizedDescription": "Starten, ohne das Einstellungsfenster anzuzeigen"
+        "startMinimizedDescription": "Starten, ohne das Einstellungsfenster anzuzeigen",
+        "showDockIcon": "Dock-Symbol anzeigen",
+        "showDockIconDescription": "OpenWhispr im Dock behalten. Deaktivieren, um nur in der Menüleiste zu laufen."
       },
       "waylandPaste": {
         "title": "Wayland-Einfügen einrichten",

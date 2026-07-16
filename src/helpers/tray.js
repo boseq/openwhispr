@@ -2,6 +2,7 @@ const { Tray, Menu, nativeImage, app } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
+const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 
 class TrayManager {
@@ -68,10 +69,6 @@ class TrayManager {
       this.attachControlPanelListeners(this.controlPanelWindow);
 
       if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
-        // Show dock icon on macOS when control panel opens
-        if (process.platform === "darwin" && app.dock) {
-          app.dock.show();
-        }
         if (this.controlPanelWindow.isMinimized()) {
           this.controlPanelWindow.restore();
         }
@@ -79,6 +76,7 @@ class TrayManager {
           this.controlPanelWindow.show();
         }
         this.controlPanelWindow.focus();
+        dockManager.setControlPanelVisible(true);
         if (this.controlPanelWindow.webContents.isCrashed()) {
           this.controlPanelWindow.webContents.reload();
         }
@@ -96,6 +94,7 @@ class TrayManager {
         if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
           this.controlPanelWindow.show();
           this.controlPanelWindow.focus();
+          dockManager.setControlPanelVisible(true);
         }
         return;
       }

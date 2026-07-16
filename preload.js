@@ -762,6 +762,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Start minimized
   notifyStartMinimizedChanged: (enabled) => ipcRenderer.send("start-minimized-changed", enabled),
 
+  // Dock icon (macOS)
+  notifyShowDockIconChanged: (enabled) => ipcRenderer.send("show-dock-icon-changed", enabled),
+
   // Auto-start management
   getAutoStartEnabled: () => ipcRenderer.invoke("get-auto-start-enabled"),
   setAutoStartEnabled: (enabled) => ipcRenderer.invoke("set-auto-start-enabled", enabled),

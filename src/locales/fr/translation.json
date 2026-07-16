@@ -1515,7 +1515,9 @@
         "title": "Démarrage",
         "description": "Contrôlez le comportement d'OpenWhispr au lancement",
         "startMinimized": "Démarrer réduit",
-        "startMinimizedDescription": "Lancer sans afficher la fenêtre du panneau de contrôle"
+        "startMinimizedDescription": "Lancer sans afficher la fenêtre du panneau de contrôle",
+        "showDockIcon": "Afficher l'icône dans le Dock",
+        "showDockIconDescription": "Garder OpenWhispr dans le Dock. Désactivez pour l'utiliser uniquement depuis la barre des menus."
       },
       "waylandPaste": {
         "title": "Configuration du collage Wayland",

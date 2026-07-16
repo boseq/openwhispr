@@ -1462,7 +1462,9 @@
         "title": "启动",
         "description": "控制 OpenWhispr 启动时的行为",
         "startMinimized": "启动时最小化",
-        "startMinimizedDescription": "启动时不显示控制面板窗口"
+        "startMinimizedDescription": "启动时不显示控制面板窗口",
+        "showDockIcon": "显示程序坞图标",
+        "showDockIconDescription": "在程序坞中保留 OpenWhispr。关闭后仅在菜单栏中运行。"
       },
       "waylandPaste": {
         "title": "Wayland 粘贴设置",

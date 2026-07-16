@@ -121,6 +121,7 @@ const BOOLEAN_SETTINGS = new Set([
   "pauseMediaOnDictation",
   "floatingIconAutoHide",
   "startMinimized",
+  "showDockIcon",
   "meetingProcessDetection",
   "speakerDiarizationEnabled",
   "dictationSileroEnabled",
@@ -409,6 +410,7 @@ export interface SettingsState
   pauseMediaOnDictation: boolean;
   floatingIconAutoHide: boolean;
   startMinimized: boolean;
+  showDockIcon: boolean;
   gcalAccounts: GoogleCalendarAccount[];
   gcalConnected: boolean;
   gcalEmail: string;
@@ -635,6 +637,7 @@ export interface SettingsState
   setPauseMediaOnDictation: (value: boolean) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
+  setShowDockIcon: (enabled: boolean) => void;
   setGcalAccounts: (accounts: GoogleCalendarAccount[]) => void;
   setNotificationsEnabled: (value: boolean) => void;
   setNotifyMeetingDetection: (value: boolean) => void;
@@ -976,6 +979,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", false),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
   startMinimized: readBoolean("startMinimized", false),
+  showDockIcon: readBoolean("showDockIcon", true),
   notificationsEnabled: readBoolean("notificationsEnabled", true),
   notifyMeetingDetection: readBoolean("notifyMeetingDetection", true),
   notifyCalendarReminders: readBoolean("notifyCalendarReminders", true),
@@ -1519,6 +1523,15 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ startMinimized: enabled });
     if (isBrowser) {
       window.electronAPI?.notifyStartMinimizedChanged?.(enabled);
+    }
+  },
+
+  setShowDockIcon: (enabled: boolean) => {
+    if (get().showDockIcon === enabled) return;
+    if (isBrowser) localStorage.setItem("showDockIcon", String(enabled));
+    set({ showDockIcon: enabled });
+    if (isBrowser) {
+      window.electronAPI?.notifyShowDockIconChanged?.(enabled);
     }
   },
 

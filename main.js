@@ -270,6 +270,7 @@ const WhisperManager = require("./src/helpers/whisper");
 const ParakeetManager = require("./src/helpers/parakeet");
 const DiarizationManager = require("./src/helpers/diarization");
 const TrayManager = require("./src/helpers/tray");
+const dockManager = require("./src/helpers/dockManager");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
 const CliBridge = require("./src/helpers/cliBridge");
 const UpdateManager = require("./src/updater");
@@ -526,6 +527,7 @@ app.on("open-url", (event, url) => {
   if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
     windowManager.controlPanelWindow.show();
     windowManager.controlPanelWindow.focus();
+    dockManager.setControlPanelVisible(true);
   }
 });
 
@@ -541,6 +543,7 @@ function handleInvitationDeepLink(deepLinkUrl) {
     if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
       windowManager.controlPanelWindow.show();
       windowManager.controlPanelWindow.focus();
+      dockManager.setControlPanelVisible(true);
       windowManager.controlPanelWindow.webContents.send("workspace-invitation-token", token);
     } else if (windowManager) {
       windowManager.createControlPanelWindow();
@@ -657,6 +660,7 @@ async function applySessionTokenAndRefresh(token) {
   }
   windowManager.controlPanelWindow.show();
   windowManager.controlPanelWindow.focus();
+  dockManager.setControlPanelVisible(true);
 }
 
 async function handleOAuthDeepLink(deepLinkUrl) {
@@ -683,6 +687,7 @@ function handleUpgradeDeepLink() {
     );
     windowManager.controlPanelWindow.show();
     windowManager.controlPanelWindow.focus();
+    dockManager.setControlPanelVisible(true);
   }
 }
 
@@ -833,6 +838,11 @@ async function startApp() {
     }
   });
 
+  ipcMain.on("show-dock-icon-changed", (_event, enabled) => {
+    environmentManager.saveShowDockIcon(enabled);
+    dockManager.setShowDockIcon(enabled);
+  });
+
   ipcMain.on("start-minimized-changed", (_event, enabled) => {
     if (debugLogger) debugLogger.info("Start minimized changed", { enabled });
     environmentManager.saveStartMinimized(enabled);
@@ -843,9 +853,7 @@ async function startApp() {
     environmentManager.savePanelStartPosition(position);
   });
 
-  if (process.platform === "darwin") {
-    app.setActivationPolicy("regular");
-  }
+  dockManager.init(environmentManager.getShowDockIcon());
 
   // In development, wait for Vite dev server to be ready
   if (process.env.NODE_ENV === "development") {
@@ -1498,6 +1506,7 @@ if (gotSingleInstanceLock) {
       }
       windowManager.controlPanelWindow.show();
       windowManager.controlPanelWindow.focus();
+      dockManager.setControlPanelVisible(true);
       if (windowManager.controlPanelWindow.webContents.isCrashed()) {
         windowManager.loadControlPanel();
       }
@@ -1596,15 +1605,12 @@ if (gotSingleInstanceLock) {
     } else {
       // Show control panel when dock icon is clicked (most common user action)
       if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
-        // Ensure dock icon is visible when control panel opens
-        if (process.platform === "darwin" && app.dock) {
-          app.dock.show();
-        }
         if (windowManager.controlPanelWindow.isMinimized()) {
           windowManager.controlPanelWindow.restore();
         }
         windowManager.controlPanelWindow.show();
         windowManager.controlPanelWindow.focus();
+        dockManager.setControlPanelVisible(true);
       } else if (windowManager) {
         // If control panel doesn't exist, create it
         windowManager.createControlPanelWindow();

@@ -5,7 +5,13 @@ import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import logger from "../utils/logger";
 import whisperVadConstants from "../constants/whisperVad.json";
-import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
+import type {
+  LocalTranscriptionProvider,
+  InferenceMode,
+  SelfHostedType,
+  PersistedLlmKeyProvider,
+  LlmKeyValidationResult,
+} from "../types/electron";
 import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { deriveReasoningMode, buildReasoningScopePatches } from "../helpers/reasoningRouting";
@@ -606,6 +612,10 @@ export interface SettingsState
   setTinfoilApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
+  saveValidatedLlmApiKey: (
+    provider: PersistedLlmKeyProvider,
+    key: string
+  ) => Promise<LlmKeyValidationResult>;
 
   // Corti (BYOK)
   cortiEnvironment: string;
@@ -865,7 +875,8 @@ function invalidateApiKeyCaches(
     | "tinfoil"
     | "custom"
     | "openrouter"
-    | "corti"
+    | "corti",
+  persist = true
 ) {
   if (provider) {
     if (_ReasoningService) {
@@ -880,8 +891,33 @@ function invalidateApiKeyCaches(
     }
   }
   if (isBrowser) window.dispatchEvent(new Event("api-key-changed"));
-  debouncedPersistToEnv();
+  if (persist) debouncedPersistToEnv();
 }
+
+const VALIDATED_LLM_STORE_KEYS: Record<PersistedLlmKeyProvider, keyof ApiKeySettings> = {
+  openai: "openaiApiKey",
+  anthropic: "anthropicApiKey",
+  gemini: "geminiApiKey",
+  groq: "groqApiKey",
+  xai: "xaiApiKey",
+  mistral: "mistralApiKey",
+  openrouter: "openrouterApiKey",
+  tinfoil: "tinfoilApiKey",
+  corti: "cortiApiKey",
+};
+
+const VALIDATED_LLM_CACHE_PROVIDERS: Partial<
+  Record<PersistedLlmKeyProvider, Parameters<typeof invalidateApiKeyCaches>[0]>
+> = {
+  openai: "openai",
+  anthropic: "anthropic",
+  gemini: "gemini",
+  groq: "groq",
+  mistral: "mistral",
+  openrouter: "openrouter",
+  tinfoil: "tinfoil",
+  corti: "corti",
+};
 
 // Uniform BYOK key setter: persist to the secure store (debounced) and clear
 // the provider's cached key. cacheProvider is omitted where there is no scoped
@@ -1426,6 +1462,46 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
   setTinfoilApiKey: createSecretSetter("tinfoilApiKey", "tinfoil", "tinfoil"),
+  saveValidatedLlmApiKey: async (provider, key) => {
+    const api = isBrowser ? window.electronAPI : undefined;
+    if (!api?.validateAndSaveLlmApiKey) {
+      return {
+        success: false,
+        provider,
+        code: "VALIDATION_FAILED",
+        error: "API-key validation is unavailable.",
+        retryable: false,
+      };
+    }
+
+    try {
+      const result = await api.validateAndSaveLlmApiKey({ provider, key });
+      if (result.success) {
+        const normalized = key.trim();
+        useSettingsStore.setState({
+          [VALIDATED_LLM_STORE_KEYS[provider]]: normalized,
+        } as Partial<SettingsState>);
+        invalidateApiKeyCaches(VALIDATED_LLM_CACHE_PROVIDERS[provider], false);
+      }
+      return result;
+    } catch (error) {
+      logger.warn(
+        "Failed to validate and persist LLM API key",
+        {
+          provider,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        "settings"
+      );
+      return {
+        success: false,
+        provider,
+        code: "VALIDATION_FAILED",
+        error: "The API key could not be validated.",
+        retryable: true,
+      };
+    }
+  },
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);

@@ -8,6 +8,8 @@ import SearchableModelList, { MODEL_SEARCH_THRESHOLD } from "./ui/SearchableMode
 import { buildApiUrl, getModelListBaseCandidates, normalizeBaseUrl } from "../config/constants";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
+import { useSettingsStore } from "../stores/settingsStore";
+import type { LlmKeyProvider, LlmKeyValidationResult } from "../types/electron";
 
 interface ModelOption {
   value: string;
@@ -31,6 +33,7 @@ interface OpenAICompatiblePanelProps {
   // Providers whose /models is public but whose inference needs a key.
   apiKeyRequired?: boolean;
   getKeyUrl?: string;
+  validationProvider?: LlmKeyProvider;
 }
 
 export default function OpenAICompatiblePanel({
@@ -46,6 +49,7 @@ export default function OpenAICompatiblePanel({
   lockedBaseUrl = false,
   apiKeyRequired = false,
   getKeyUrl,
+  validationProvider,
 }: OpenAICompatiblePanelProps) {
   const { t } = useTranslation();
   const [draftBase, setDraftBase] = useState(baseUrl);
@@ -56,6 +60,7 @@ export default function OpenAICompatiblePanel({
   const lastLoadedBaseRef = useRef<string | null>(null);
   const pendingBaseRef = useRef<string | null>(null);
   const latestBaseRef = useRef<string>(normalizeBaseUrl(baseUrl));
+  const saveValidatedLlmApiKey = useSettingsStore((s) => s.saveValidatedLlmApiKey);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -278,6 +283,45 @@ export default function OpenAICompatiblePanel({
     loadRemoteModels(undefined, true);
   }, [applyBase, isDraftDirty, trimmedDraft, loadRemoteModels]);
 
+  const handleApiKeySave = useCallback(
+    async (key: string): Promise<LlmKeyValidationResult> => {
+      if (!validationProvider) {
+        setApiKey(key);
+        return { success: true, provider: "" };
+      }
+
+      if (validationProvider !== "custom") {
+        return saveValidatedLlmApiKey(validationProvider, key);
+      }
+
+      const normalized = key.trim();
+      if (!normalized) {
+        setApiKey("");
+        return { success: true, provider: "custom", removed: true };
+      }
+
+      const api = window.electronAPI;
+      if (!api?.testLlmApiKey) {
+        return {
+          success: false,
+          provider: "custom",
+          code: "VALIDATION_FAILED",
+          error: "API-key validation is unavailable.",
+          retryable: false,
+        };
+      }
+
+      const result = await api.testLlmApiKey({
+        provider: "custom",
+        key: normalized,
+        baseUrl: normalizeBaseUrl(draftBase || baseUrl),
+      });
+      if (result.success) setApiKey(normalized);
+      return result;
+    },
+    [baseUrl, draftBase, saveValidatedLlmApiKey, setApiKey, validationProvider]
+  );
+
   const displayedModels = isDraftDirty ? [] : modelOptions;
   const queryUrl = hasBase ? `${normalizedBase}/models` : `${baseUrlPlaceholder}/models`;
 
@@ -313,6 +357,7 @@ export default function OpenAICompatiblePanel({
         <ApiKeyInput
           apiKey={apiKey}
           setApiKey={setApiKey}
+          onSave={validationProvider ? handleApiKeySave : undefined}
           label=""
           helpText={apiKeyRequired ? "" : t("reasoning.custom.apiKeyHelp")}
         />

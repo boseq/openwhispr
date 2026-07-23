@@ -36,6 +36,7 @@ export default function FinishStep({
   const setCortiClientSecret = useSettingsStore((s) => s.setCortiClientSecret);
   const cortiApiKey = useSettingsStore((s) => s.cortiApiKey);
   const setCortiApiKey = useSettingsStore((s) => s.setCortiApiKey);
+  const saveValidatedLlmApiKey = useSettingsStore((s) => s.saveValidatedLlmApiKey);
   const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
   const setCortiEnvironment = useSettingsStore((s) => s.setCortiEnvironment);
 
@@ -140,7 +141,13 @@ export default function FinishStep({
               <label className="text-xs font-medium text-foreground">
                 {t("transcription.corti.apiKey")}
               </label>
-              <ApiKeyInput apiKey={cortiApiKey} setApiKey={setCortiApiKey} label="" helpText="" />
+              <ApiKeyInput
+                apiKey={cortiApiKey}
+                setApiKey={setCortiApiKey}
+                onSave={(key) => saveValidatedLlmApiKey("corti", key)}
+                label=""
+                helpText=""
+              />
               {cortiApiKey.trim() && (
                 <p className="text-xs text-muted-foreground/70">
                   {t("onboarding.finish.corti.llmHint")}

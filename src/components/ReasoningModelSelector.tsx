@@ -340,6 +340,7 @@ export default function ReasoningModelSelector({
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
   const cortiApiKey = useSettingsStore((s) => s.cortiApiKey);
   const setCortiApiKey = useSettingsStore((s) => s.setCortiApiKey);
+  const saveValidatedLlmApiKey = useSettingsStore((s) => s.saveValidatedLlmApiKey);
   const [selectedMode, setSelectedMode] = useState<"cloud" | "local">(mode || "cloud");
   const [selectedCloudProvider, setSelectedCloudProvider] = useState("openai");
   const [selectedLocalProvider, setSelectedLocalProvider] = useState("qwen");
@@ -559,6 +560,7 @@ export default function ReasoningModelSelector({
                 lockedBaseUrl
                 apiKeyRequired
                 getKeyUrl={OPENROUTER_KEYS_URL}
+                validationProvider="openrouter"
               />
             ) : selectedCloudProvider === "custom" ? (
               <OpenAICompatiblePanel
@@ -570,6 +572,7 @@ export default function ReasoningModelSelector({
                 model={reasoningModel}
                 setModel={setReasoningModel}
                 defaultBaseUrl={API_ENDPOINTS.OPENAI_BASE}
+                validationProvider="custom"
               />
             ) : (
               <>
@@ -582,6 +585,7 @@ export default function ReasoningModelSelector({
                     <ApiKeyInput
                       apiKey={openaiApiKey}
                       setApiKey={setOpenaiApiKey}
+                      onSave={(key) => saveValidatedLlmApiKey("openai", key)}
                       label=""
                       helpText=""
                     />
@@ -597,6 +601,7 @@ export default function ReasoningModelSelector({
                     <ApiKeyInput
                       apiKey={anthropicApiKey}
                       setApiKey={setAnthropicApiKey}
+                      onSave={(key) => saveValidatedLlmApiKey("anthropic", key)}
                       label=""
                       helpText=""
                     />
@@ -612,6 +617,7 @@ export default function ReasoningModelSelector({
                     <ApiKeyInput
                       apiKey={geminiApiKey}
                       setApiKey={setGeminiApiKey}
+                      onSave={(key) => saveValidatedLlmApiKey("gemini", key)}
                       label=""
                       helpText=""
                     />
@@ -627,6 +633,7 @@ export default function ReasoningModelSelector({
                     <ApiKeyInput
                       apiKey={groqApiKey}
                       setApiKey={setGroqApiKey}
+                      onSave={(key) => saveValidatedLlmApiKey("groq", key)}
                       label=""
                       helpText=""
                     />
@@ -642,6 +649,7 @@ export default function ReasoningModelSelector({
                     <ApiKeyInput
                       apiKey={tinfoilApiKey}
                       setApiKey={setTinfoilApiKey}
+                      onSave={(key) => saveValidatedLlmApiKey("tinfoil", key)}
                       label=""
                       helpText=""
                     />
@@ -658,6 +666,7 @@ export default function ReasoningModelSelector({
                     <ApiKeyInput
                       apiKey={cortiApiKey}
                       setApiKey={setCortiApiKey}
+                      onSave={(key) => saveValidatedLlmApiKey("corti", key)}
                       label=""
                       helpText=""
                     />

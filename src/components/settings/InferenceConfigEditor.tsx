@@ -178,6 +178,7 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
           model={config.model}
           setModel={setModel}
           baseUrlPlaceholder="http://192.168.1.126:11434/v1"
+          validationProvider="custom"
           helpExamples={
             <p className="text-xs text-muted-foreground">
               {t("reasoning.selfHosted.endpointHelp")}

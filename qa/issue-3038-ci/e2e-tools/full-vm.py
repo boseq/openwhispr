@@ -70,7 +70,7 @@ command = ["qemu-system-x86_64", "-machine", "q35", "-accel", "tcg,thread=multi"
            "-drive", f"file={seed},if=virtio,format=raw",
            "-netdev", "user,id=net0,hostfwd=tcp:127.0.0.1:2222-:22",
            "-device", "virtio-net-pci,netdev=net0",
-           "-virtfs", f"local,path={root},mount_tag=qa,security_model=none,id=qa"]
+           "-virtfs", f"local,path={root},mount_tag=qa,security_model=mapped-xattr,id=qa"]
 (evidence / "qemu-command.json").write_text(json.dumps(command, indent=2))
 ssh = ["ssh", "-i", str(key), "-p", "2222", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=accept-new",
        "-o", f"UserKnownHostsFile={vm / 'known_hosts'}", "-o", "ConnectTimeout=4", "ubuntu@127.0.0.1"]
@@ -99,6 +99,8 @@ with (evidence / "qemu.log").open("w") as log:
 sudo mkdir -p /mnt/qa
 sudo mount -t 9p -o trans=virtio,version=9p2000.L qa /mnt/qa
 sudo modprobe fuse
+mkdir /mnt/qa/results/share-preflight
+printf ok > /mnt/qa/results/share-preflight/probe
 ulimit -c 0
 E2E_SCRATCH=/var/tmp/issue3038 dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' /usr/bin/python3 /mnt/qa/tools/e2e.py /mnt/qa cpu-vm
 """

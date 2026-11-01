@@ -41,7 +41,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y xvfb xauth dbus-x11 scrot qemu-user qemu-system-x86 cloud-image-utils ovmf rpm2cpio cpio libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libxss1 libxshmfence1 libxkbfile1 libpulse0 libfuse2t64
+          sudo apt-get install -y xvfb xauth dbus-x11 scrot gdb qemu-user qemu-system-x86 cloud-image-utils ovmf rpm2cpio cpio libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libxss1 libxshmfence1 libxkbfile1 libpulse0 libfuse2t64
           mkdir -p "$RUNNER_TEMP/issue3038-e2e/tools" "$RUNNER_TEMP/issue3038-e2e/results"
           cp qa/issue-3038-ci/e2e-tools/* "$RUNNER_TEMP/issue3038-e2e/tools/"
       - uses: actions/download-artifact@v7

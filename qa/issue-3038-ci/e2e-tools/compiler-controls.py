@@ -23,6 +23,8 @@ with (out/'preflight.log').open('w') as log:
 (out/'preflight.json').write_text(json.dumps({'exit':preflight.returncode,
     'binding_sha256':hashlib.sha256(original).hexdigest()},indent=2))
 if preflight.returncode:
+    subprocess.run(['python3',Path(__file__).with_name('runtime-diagnostics.py'),app,out/'runtime'],
+                   check=True,timeout=240)
     raise RuntimeError('Original packaged binding preflight failed; do not interpret compiler controls')
 package=json.loads((source/'package.json').read_text())
 electron=package['devDependencies']['electron'].lstrip('^~')

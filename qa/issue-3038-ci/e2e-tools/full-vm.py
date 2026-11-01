@@ -9,6 +9,12 @@ import time
 import urllib.request
 
 root = Path(sys.argv[1]).resolve()
+accelerated = len(sys.argv) > 2 and sys.argv[2] == "cpu-kvm"
+cpu = "Nehalem" if accelerated else "IvyBridge"
+accelerator = "kvm" if accelerated else "tcg,thread=multi"
+if accelerated:
+    subprocess.run(["sudo", "chmod", "a+rw", "/dev/kvm"], check=True)
+
 vm = root.parent / "issue3038-vm"
 vm.mkdir(exist_ok=True)
 evidence = root / "results/full-vm-host"
@@ -61,8 +67,8 @@ subprocess.run(["qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-b", image,
 variables = vm / "OVMF_VARS.fd"
 shutil.copy2("/usr/share/OVMF/OVMF_VARS_4M.fd", variables)
 subprocess.run(["chmod", "-R", "a+rwX", root], check=True)
-command = ["qemu-system-x86_64", "-machine", "q35", "-accel", "tcg,thread=multi",
-           "-cpu", "IvyBridge", "-smp", "4", "-m", "6144", "-display", "none", "-monitor", "none",
+command = ["qemu-system-x86_64", "-machine", "q35", "-accel", accelerator,
+           "-cpu", cpu, "-smp", "4", "-m", "6144", "-display", "none", "-monitor", "none",
            "-serial", f"file:{evidence / 'serial.log'}",
            "-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd",
            "-drive", f"if=pflash,format=raw,file={variables}",
@@ -91,7 +97,7 @@ with (evidence / "qemu.log").open("w") as log:
                 ready = True
                 break
             if attempt % 6 == 0:
-                print(f"Waiting for full IvyBridge guest/cloud-init ({attempt * 10}s)", flush=True)
+                print(f"Waiting for full {cpu} guest/cloud-init ({attempt * 10}s)", flush=True)
             time.sleep(10)
         if not ready:
             raise RuntimeError("Guest/cloud-init did not become ready")

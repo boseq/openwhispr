@@ -14,7 +14,7 @@ on:
         description: 'Test environment to run'
         type: choice
         default: all
-        options: [all, native, cpu-vm, compiler]
+        options: [all, native, cpu-vm, cpu-kvm, compiler]
 permissions:
   contents: read
   actions: read
@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: ${{ fromJSON(inputs.environment == 'compiler' && '["compiler"]' || inputs.environment == 'native' && '["native"]' || inputs.environment == 'cpu-vm' && '["cpu-vm"]' || '["native","cpu-vm","compiler"]') }}
+        environment: ${{ fromJSON(inputs.environment == 'compiler' && '["compiler"]' || inputs.environment == 'native' && '["native"]' || inputs.environment == 'cpu-vm' && '["cpu-vm"]' || inputs.environment == 'cpu-kvm' && '["cpu-kvm"]' || '["native","cpu-vm","compiler"]') }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -81,9 +81,9 @@ jobs:
           docker build -t ow-issue3038-arch -f qa/issue-3038-ci/e2e-arch.Dockerfile .
           chmod -R a+rwX "$RUNNER_TEMP/issue3038-e2e"
           docker run --rm --shm-size=2g -v "$RUNNER_TEMP/issue3038-e2e:/qa" ow-issue3038-arch dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' python /qa/tools/e2e.py /qa arch
-      - name: Full x86 IvyBridge guest, base versus head
-        if: matrix.environment == 'cpu-vm'
-        run: python3 "$RUNNER_TEMP/issue3038-e2e/tools/full-vm.py" "$RUNNER_TEMP/issue3038-e2e"
+      - name: Full x86 guest, base versus head
+        if: startsWith(matrix.environment, 'cpu-')
+        run: python3 "$RUNNER_TEMP/issue3038-e2e/tools/full-vm.py" "$RUNNER_TEMP/issue3038-e2e" "${{ matrix.environment }}"
       - name: Upload logs and screenshots
         if: always()
         uses: actions/upload-artifact@v7

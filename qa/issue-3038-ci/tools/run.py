@@ -189,7 +189,9 @@ def cpu_trials():
 
 run(["sh", "-c", "uname -a; lscpu; cat /etc/os-release; ldd --version; node --version"],
     out / "environment.txt")
-if plan == "extended":
+if plan == "features":
+    subprocess.run([sys.executable, tools / "feature-controls.py", root], check=True)
+elif plan == "extended":
     for version in ("1.10.4", "1.11.0"):
         native_trial(version, "deb", upgrade=True)
     for version in ("1.10.4", "1.11.0"):

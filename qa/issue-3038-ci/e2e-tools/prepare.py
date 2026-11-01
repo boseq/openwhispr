@@ -9,6 +9,10 @@ root = Path(sys.argv[1]).resolve()
 artifacts = Path(sys.argv[2]).resolve()
 payloads = root / "payloads"
 payloads.mkdir(exist_ok=True)
+# Only archives are consumed below; discard the unused duplicate app first.
+unpacked = artifacts / "linux-unpacked"
+if unpacked.exists():
+    shutil.rmtree(unpacked)
 
 def app_under(directory):
     candidates = list(directory.rglob("open-whispr-app"))
@@ -59,6 +63,7 @@ for kind, pattern in (("deb", "*.deb"), ("rpm", "*.rpm"), ("tar", "*.tar.gz"),
         runtime = root / "head.AppImage"
         shutil.copy2(archive, runtime)
         specs["head-appimage-runtime"] = {**specs["head-appimage"], "launcher": "head.AppImage"}
+    archive.unlink()
 
 if len({item["binding_sha256"] for item in hashes}) != 1:
     raise RuntimeError("Head formats contain different SQLite bindings")

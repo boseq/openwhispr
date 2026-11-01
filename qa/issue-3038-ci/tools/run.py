@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import resource
 from pathlib import Path
 import shutil
 import signal
@@ -11,11 +12,13 @@ import urllib.request
 
 root = Path(sys.argv[1]).resolve()
 platform_name = sys.argv[2]
+plan = sys.argv[3] if len(sys.argv) > 3 else "standard"
 tools = Path(__file__).resolve().parent
-out = root / "results" / platform_name
+out = root / "results" / (platform_name + ("-extended" if plan == "extended" else ""))
 out.mkdir(parents=True, exist_ok=True)
 scratch = root / "scratch" / platform_name
 scratch.mkdir(parents=True, exist_ok=True)
+resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
 def run(command, dest, env=None, timeout=40):
@@ -61,6 +64,8 @@ def payload(version, kind):
         app_root = root / "downloads" / version / "tar" / f"OpenWhispr-{version}-linux-x64"
         return app_root, app_root / "open-whispr"
     app_root = root / "downloads" / version / "appimage/squashfs-root"
+    if kind == "appimage-runtime":
+        return app_root, root / "downloads" / version / f"OpenWhispr-{version}-linux-x86_64.AppImage"
     return app_root, app_root / "AppRun"
 
 
@@ -79,27 +84,30 @@ def stop(proc):
             pass
 
 
-def native_trial(version, kind):
-    label = f"{version}-{kind}"
+def native_trial(version, kind, upgrade=False, cpu=None):
+    label = f"{version}-{kind}" + ("-upgrade" if upgrade else "") + (f"-cpu-{cpu}" if cpu else "")
     dest = out / label
     dest.mkdir(exist_ok=True)
     app_root, launcher = payload(version, kind)
     binary = app_root / "open-whispr-app"
-    runtime_dir = scratch / label
+    runtime_dir = scratch / ("upgrade-Grüße" if upgrade else label)
     env = base_env(runtime_dir)
-    port = 9300 + (30 if version == "1.11.0" else 0) + {"deb": 0, "appimage": 10, "tar": 20}[kind]
+    if kind == "appimage-runtime":
+        env["APPIMAGE_EXTRACT_AND_RUN"] = "1"
+    port = 9300 + (40 if version == "1.11.0" else 0) + {"deb": 0, "appimage": 10, "tar": 20, "appimage-runtime": 30}[kind]
     inspector = port + 1
     cdp_ports = ["--port", str(port), "--inspect-port", str(inspector)]
     args = ["--no-sandbox", "--ozone-platform=x11", "--log-level=debug",
             f"--user-data-dir={runtime_dir / 'profile'}", f"--remote-debugging-port={port}",
             f"--inspect={inspector}"]
     summary = {"version": version, "format": kind, "start_utc": datetime.datetime.now(
-        datetime.timezone.utc).isoformat(), "launch": str(launcher), "args": args}
+        datetime.timezone.utc).isoformat(), "launch": str(launcher), "args": args, "cpu": cpu}
     with (dest / "stdout.log").open("w") as log:
-        proc = subprocess.Popen([str(launcher), *args], env=env, stdout=log,
+        command = (["qemu-x86_64", "-cpu", cpu, str(binary)] if cpu else [str(launcher)])
+        proc = subprocess.Popen([*command, *args], env=env, stdout=log,
                                 stderr=subprocess.STDOUT, start_new_session=True)
         updates_off = False
-        deadline = time.monotonic() + 90
+        deadline = time.monotonic() + (120 if cpu else 90)
         while proc.poll() is None and time.monotonic() < deadline:
             if not updates_off and get_json(inspector, "/json/list"):
                 cdp(["main", str(tools / "updates-off.js"), *cdp_ports], dest / "updates-off.json")
@@ -123,15 +131,28 @@ def native_trial(version, kind):
             if summary["runtime_probe_exit"] == 0:
                 runtime = json.loads((dest / "runtime.json").read_text())
                 summary["runtime_version_matches"] = runtime.get("version") == version
+            if upgrade:
+                script = "seed-upgrade.js" if version == "1.10.4" else "check-upgrade.js"
+                summary["upgrade_probe_exit"] = cdp(
+                    ["run", "panel", str(tools / script), *cdp_ports], dest / "upgrade.json")
+                summary["upgrade_marker_present"] = (
+                    "ISSUE3038_UPGRADE" in (dest / "upgrade.json").read_text())
             run(["scrot", dest / "desktop.png"], dest / "screenshot.log", timeout=10)
             time.sleep(12)
         summary.update(pages_available=bool(pages), updates_disabled=updates_off,
                        alive_before_stop=proc.poll() is None, exit_before_stop=proc.poll())
+        if upgrade and pages:
+            cdp(["main", "setTimeout(() => process.mainModule.require('electron').app.quit(), 100); true",
+                 *cdp_ports], dest / "quit.log")
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
         stop(proc)
     profile_logs = runtime_dir / "profile/logs"
     if profile_logs.exists():
         shutil.copytree(profile_logs, dest / "debug-logs", dirs_exist_ok=True)
-    if not summary["pages_available"] and binary.exists():
+    if not summary["pages_available"] and binary.exists() and not cpu:
         commands = dest / "gdb-commands.txt"
         commands.write_text("set pagination off\nset confirm off\n"
                             "handle SIGPIPE nostop noprint pass\n"
@@ -166,8 +187,17 @@ def cpu_trials():
 
 run(["sh", "-c", "uname -a; lscpu; cat /etc/os-release; ldd --version; node --version"],
     out / "environment.txt")
-for version in ("1.10.4", "1.11.0"):
-    for kind in (("deb", "appimage") if platform_name == "ubuntu" else ("appimage", "tar")):
-        native_trial(version, kind)
-if platform_name == "ubuntu":
-    cpu_trials()
+if plan == "extended":
+    for version in ("1.10.4", "1.11.0"):
+        native_trial(version, "deb", upgrade=True)
+    for version in ("1.10.4", "1.11.0"):
+        native_trial(version, "appimage-runtime")
+    subprocess.run([sys.executable, tools / "cpu-trace.py", root], check=True)
+    for version in ("1.10.4", "1.11.0"):
+        native_trial(version, "deb", cpu="IvyBridge")
+else:
+    for version in ("1.10.4", "1.11.0"):
+        for kind in (("deb", "appimage") if platform_name == "ubuntu" else ("appimage", "tar")):
+            native_trial(version, kind)
+    if platform_name == "ubuntu":
+        cpu_trials()

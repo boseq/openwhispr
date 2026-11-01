@@ -7,12 +7,20 @@ on:
         required: true
         default: '["ubuntu","arch"]'
         type: string
+      plan:
+        description: 'standard startup matrix or extended upgrade/runtime/CPU trace'
+        required: true
+        default: standard
+        type: choice
+        options: [standard, extended]
 permissions:
   contents: read
 jobs:
   diagnose:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    env:
+      PLAN: ${{ inputs.plan }}
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +47,7 @@ jobs:
       - name: Run Ubuntu x64 comparisons and CPU probes
         if: matrix.userspace == 'ubuntu'
         run: |
-          dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' python3 qa/issue-3038-ci/tools/run.py "$RUNNER_TEMP/issue3038" ubuntu
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' python3 qa/issue-3038-ci/tools/run.py "$RUNNER_TEMP/issue3038" ubuntu "$PLAN"
       - name: Run Arch x64 AppImage comparisons
         if: matrix.userspace == 'arch'
         run: |

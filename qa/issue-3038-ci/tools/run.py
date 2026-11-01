@@ -94,7 +94,9 @@ def native_trial(version, kind, upgrade=False, cpu=None):
     env = base_env(runtime_dir)
     if kind == "appimage-runtime":
         env["APPIMAGE_EXTRACT_AND_RUN"] = "1"
-    port = 9300 + (40 if version == "1.11.0" else 0) + {"deb": 0, "appimage": 10, "tar": 20, "appimage-runtime": 30}[kind]
+    port = (9300 + (40 if version == "1.11.0" else 0)
+            + {"deb": 0, "appimage": 10, "tar": 20, "appimage-runtime": 30}[kind]
+            + (200 if cpu else 100 if upgrade else 0))
     inspector = port + 1
     cdp_ports = ["--port", str(port), "--inspect-port", str(inspector)]
     args = ["--no-sandbox", "--ozone-platform=x11", "--log-level=debug",

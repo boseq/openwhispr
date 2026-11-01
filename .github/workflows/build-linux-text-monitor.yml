@@ -14,18 +14,18 @@ on:
         description: 'Test environment to run'
         type: choice
         default: all
-        options: [all, native, cpu-vm]
+        options: [all, native, cpu-vm, compiler]
 permissions:
   contents: read
   actions: read
 jobs:
   e2e:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.environment == 'compiler' && 'ubuntu-26.04' || 'ubuntu-24.04' }}
     timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
-        environment: ${{ fromJSON(inputs.environment == 'native' && '["native"]' || inputs.environment == 'cpu-vm' && '["cpu-vm"]' || '["native","cpu-vm"]') }}
+        environment: ${{ fromJSON(inputs.environment == 'compiler' && '["compiler"]' || inputs.environment == 'native' && '["native"]' || inputs.environment == 'cpu-vm' && '["cpu-vm"]' || '["native","cpu-vm"]') }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -61,6 +61,13 @@ jobs:
           python3 "$RUNNER_TEMP/issue3038-e2e/tools/download.py" "$RUNNER_TEMP/issue3038-e2e/downloads" deb
           python3 "$RUNNER_TEMP/issue3038-e2e/tools/prepare.py" "$RUNNER_TEMP/issue3038-e2e" "$RUNNER_TEMP/issue3038-e2e/artifacts"
           cp "$RUNNER_TEMP/issue3038-e2e/package-hashes.json" "$RUNNER_TEMP/issue3038-e2e/results/"
+      - name: Install source rebuild dependencies
+        if: matrix.environment == 'compiler'
+        working-directory: head
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: GCC 15 source rebuild controls with the packaged Electron ABI
+        if: matrix.environment == 'compiler'
+        run: python3 "$RUNNER_TEMP/issue3038-e2e/tools/compiler-controls.py" "$RUNNER_TEMP/issue3038-e2e" "$GITHUB_WORKSPACE/head"
       - name: Exact new probe on broken base and all corrected formats
         if: matrix.environment == 'native'
         run: python3 "$RUNNER_TEMP/issue3038-e2e/tools/base-vs-head.py" "$RUNNER_TEMP/issue3038-e2e" "$GITHUB_WORKSPACE/head"

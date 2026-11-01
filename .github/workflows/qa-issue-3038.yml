@@ -1,0 +1,52 @@
+name: Issue 3038 native x64 startup diagnosis
+on:
+  push:
+    branches: [codex/qa-issue-3038-native]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        userspace: [ubuntu, arch]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Install diagnostic dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gdb xvfb xauth dbus-x11 scrot qemu-user libgtk-3-0 libnss3 libasound2t64 libgbm1 libxss1 libxshmfence1 libxkbfile1 libpulse0
+      - name: Download and verify official releases
+        env:
+          USERSPACE: ${{ matrix.userspace }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/issue3038"
+          formats='appimage'
+          if [ "$USERSPACE" = ubuntu ]; then formats='deb appimage'; fi
+          python3 qa/issue-3038-ci/tools/download.py "$RUNNER_TEMP/issue3038/downloads" $formats
+      - name: Run Ubuntu x64 comparisons and CPU probes
+        if: matrix.userspace == 'ubuntu'
+        run: |
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' python3 qa/issue-3038-ci/tools/run.py "$RUNNER_TEMP/issue3038" ubuntu
+      - name: Run Arch x64 AppImage comparisons
+        if: matrix.userspace == 'arch'
+        run: |
+          docker build -t ow-issue3038-arch -f qa/issue-3038-ci/arch.Dockerfile .
+          docker run --rm --shm-size=2g --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
+            -v "$RUNNER_TEMP/issue3038:/qa" -v "$PWD/qa/issue-3038-ci/tools:/tools:ro" \
+            ow-issue3038-arch dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' python /tools/run.py /qa arch
+      - name: Upload text evidence and screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: issue3038-native-${{ matrix.userspace }}
+          path: ${{ runner.temp }}/issue3038/results
+          retention-days: 7

@@ -14,6 +14,8 @@ platform_name = sys.argv[2]
 tools = Path(__file__).resolve().parent
 out = root / "results" / platform_name
 out.mkdir(parents=True, exist_ok=True)
+scratch = root / "scratch" / platform_name
+scratch.mkdir(parents=True, exist_ok=True)
 
 
 def run(command, dest, env=None, timeout=40):
@@ -41,6 +43,7 @@ def cdp(command, dest, timeout=25):
 
 
 def base_env(dest):
+    dest.mkdir(parents=True, exist_ok=True)
     home = dest / "home"
     home.mkdir(exist_ok=True)
     env = os.environ.copy()
@@ -53,6 +56,9 @@ def base_env(dest):
 def payload(version, kind):
     if kind == "deb":
         app_root = root / "downloads" / version / "deb/opt/OpenWhispr"
+        return app_root, app_root / "open-whispr"
+    if kind == "tar":
+        app_root = root / "downloads" / version / "tar" / f"OpenWhispr-{version}-linux-x64"
         return app_root, app_root / "open-whispr"
     app_root = root / "downloads" / version / "appimage/squashfs-root"
     return app_root, app_root / "AppRun"
@@ -79,12 +85,13 @@ def native_trial(version, kind):
     dest.mkdir(exist_ok=True)
     app_root, launcher = payload(version, kind)
     binary = app_root / "open-whispr-app"
-    env = base_env(dest)
-    port = 9300 + (20 if version == "1.11.0" else 0) + (10 if kind == "appimage" else 0)
+    runtime_dir = scratch / label
+    env = base_env(runtime_dir)
+    port = 9300 + (30 if version == "1.11.0" else 0) + {"deb": 0, "appimage": 10, "tar": 20}[kind]
     inspector = port + 1
     cdp_ports = ["--port", str(port), "--inspect-port", str(inspector)]
     args = ["--no-sandbox", "--ozone-platform=x11", "--log-level=debug",
-            f"--user-data-dir={dest / 'profile'}", f"--remote-debugging-port={port}",
+            f"--user-data-dir={runtime_dir / 'profile'}", f"--remote-debugging-port={port}",
             f"--inspect={inspector}"]
     summary = {"version": version, "format": kind, "start_utc": datetime.datetime.now(
         datetime.timezone.utc).isoformat(), "launch": str(launcher), "args": args}
@@ -121,7 +128,7 @@ def native_trial(version, kind):
         summary.update(pages_available=bool(pages), updates_disabled=updates_off,
                        alive_before_stop=proc.poll() is None, exit_before_stop=proc.poll())
         stop(proc)
-    profile_logs = dest / "profile/logs"
+    profile_logs = runtime_dir / "profile/logs"
     if profile_logs.exists():
         shutil.copytree(profile_logs, dest / "debug-logs", dirs_exist_ok=True)
     if not summary["pages_available"] and binary.exists():
@@ -133,7 +140,7 @@ def native_trial(version, kind):
                             "x/16i $pc-24\ninfo sharedlibrary\n")
         summary["gdb_exit"] = run(["gdb", "-q", "-batch", "-x", commands, "--args", binary,
                                    "--no-sandbox", "--ozone-platform=x11", "--log-level=debug",
-                                   f"--user-data-dir={dest / 'gdb-profile'}"],
+                                   f"--user-data-dir={runtime_dir / 'gdb-profile'}"],
                                   dest / "gdb.log", env=env, timeout=100)
     (dest / "result.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary), flush=True)
@@ -145,7 +152,7 @@ def cpu_trials():
         for cpu in ("Nehalem", "SandyBridge", "IvyBridge", "Haswell"):
             dest = out / f"{version}-cpu-{cpu}"
             dest.mkdir(exist_ok=True)
-            env = base_env(dest)
+            env = base_env(scratch / f"{version}-cpu-{cpu}")
             env["ELECTRON_RUN_AS_NODE"] = "1"
             summary = {"version": version, "cpu": cpu}
             prefix = ["qemu-x86_64", "-cpu", cpu, app_root / "open-whispr-app"]
@@ -160,7 +167,7 @@ def cpu_trials():
 run(["sh", "-c", "uname -a; lscpu; cat /etc/os-release; ldd --version; node --version"],
     out / "environment.txt")
 for version in ("1.10.4", "1.11.0"):
-    for kind in (("deb", "appimage") if platform_name == "ubuntu" else ("appimage",)):
+    for kind in (("deb", "appimage") if platform_name == "ubuntu" else ("appimage", "tar")):
         native_trial(version, kind)
 if platform_name == "ubuntu":
     cpu_trials()

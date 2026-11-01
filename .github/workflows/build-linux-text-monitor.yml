@@ -1,8 +1,12 @@
 name: Issue 3038 native x64 startup diagnosis
 on:
-  push:
-    branches: [codex/qa-issue-3038-native]
   workflow_dispatch:
+    inputs:
+      userspaces:
+        description: 'JSON list of userspaces to diagnose'
+        required: true
+        default: '["ubuntu","arch"]'
+        type: string
 permissions:
   contents: read
 jobs:
@@ -12,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        userspace: [ubuntu, arch]
+        userspace: ${{ fromJSON(inputs.userspaces) }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -29,7 +33,7 @@ jobs:
           USERSPACE: ${{ matrix.userspace }}
         run: |
           mkdir -p "$RUNNER_TEMP/issue3038"
-          formats='appimage'
+          formats='appimage tar'
           if [ "$USERSPACE" = ubuntu ]; then formats='deb appimage'; fi
           python3 qa/issue-3038-ci/tools/download.py "$RUNNER_TEMP/issue3038/downloads" $formats
       - name: Run Ubuntu x64 comparisons and CPU probes

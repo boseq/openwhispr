@@ -20,6 +20,7 @@ for version in ("1.10.4", "1.11.0"):
     names = {
         "deb": f"OpenWhispr-{version}-linux-amd64.deb",
         "appimage": f"OpenWhispr-{version}-linux-x86_64.AppImage",
+        "tar": f"OpenWhispr-{version}-linux-x64.tar.gz",
     }
     for kind in formats:
         asset = next(item for item in release["assets"] if item["name"] == names[kind])
@@ -33,10 +34,14 @@ for version in ("1.10.4", "1.11.0"):
         if kind == "deb":
             unpacked = dest / "deb"
             subprocess.run(["dpkg-deb", "-x", str(path), str(unpacked)], check=True)
-        else:
+        elif kind == "appimage":
             path.chmod(0o755)
             unpacked = dest / "appimage"
             unpacked.mkdir(exist_ok=True)
             with (dest / "extract.log").open("w") as log:
                 subprocess.run([str(path), "--appimage-extract"], cwd=unpacked,
                                stdout=log, stderr=subprocess.STDOUT, check=True)
+        else:
+            unpacked = dest / "tar"
+            unpacked.mkdir(exist_ok=True)
+            subprocess.run(["tar", "-xzf", str(path), "-C", str(unpacked)], check=True)

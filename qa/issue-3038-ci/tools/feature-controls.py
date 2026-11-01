@@ -19,7 +19,7 @@ for version in ("1.10.4", "1.11.0"):
         bindings.append({"path": str(binding.relative_to(root)),
                          "sha256": hashlib.file_digest(binding.open("rb"), "sha256").hexdigest()})
     (out / f"bindings-{version}.json").write_text(json.dumps(bindings, indent=2))
-    for index, cpu in enumerate(("IvyBridge", "IvyBridge,+avx2", "Haswell,-avx2")):
+    for index, cpu in enumerate(("Haswell", "Haswell,-avx2")):
         case = out / f"{version}-{index}"
         case.mkdir(exist_ok=True)
         env = os.environ.copy()

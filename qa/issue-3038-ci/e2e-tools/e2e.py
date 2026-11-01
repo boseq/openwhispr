@@ -70,7 +70,7 @@ def trial(label, package, profile, action="seed", expect_sigill=False):
                     try:
                         cdp(["main", str(tools / "updates-off.js")], f"updates-off-{attempt}.json")
                         updates_off = True
-                    except RuntimeError:
+                    except (RuntimeError, subprocess.TimeoutExpired):
                         # The inspector can publish a target before the app context exists.
                         pass
                 pages = endpoint(port)
@@ -95,11 +95,14 @@ def trial(label, package, profile, action="seed", expect_sigill=False):
                     raise RuntimeError(f"Wrong instance: {runtime}")
                 deadline = time.monotonic() + 90
                 while time.monotonic() < deadline:
-                    renderer = cdp(["run", "panel", str(tools / "renderer.js")], "renderer.json")
-                    windows = cdp(["windows"], "windows.json")
-                    visible = any(window["visible"] and "panel=true" in window["url"] for window in windows)
-                    if renderer["ready"] and visible:
-                        break
+                    try:
+                        renderer = cdp(["run", "panel", str(tools / "renderer.js")], "renderer.json")
+                        windows = cdp(["windows"], "windows.json")
+                        visible = any(window["visible"] and "panel=true" in window["url"] for window in windows)
+                        if renderer["ready"] and visible:
+                            break
+                    except (RuntimeError, subprocess.TimeoutExpired):
+                        pass
                     if proc.poll() is not None:
                         raise RuntimeError("App exited while waiting for the welcome window")
                     time.sleep(0.5)

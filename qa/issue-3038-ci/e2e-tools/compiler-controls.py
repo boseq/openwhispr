@@ -17,6 +17,13 @@ specs=json.loads((root/'manifest.json').read_text())
 app=root/specs['head-deb']['app']
 binding=next(app.rglob('better_sqlite3.node'))
 original=binding.read_bytes()
+with (out/'preflight.log').open('w') as log:
+    preflight=subprocess.run(['node',source/'scripts/verify-linux-sqlite.js',app],stdout=log,
+                             stderr=subprocess.STDOUT,timeout=160)
+(out/'preflight.json').write_text(json.dumps({'exit':preflight.returncode,
+    'binding_sha256':hashlib.sha256(original).hexdigest()},indent=2))
+if preflight.returncode:
+    raise RuntimeError('Original packaged binding preflight failed; do not interpret compiler controls')
 package=json.loads((source/'package.json').read_text())
 electron=package['devDependencies']['electron'].lstrip('^~')
 assert subprocess.check_output(['gcc-15','-dumpversion'],text=True).strip()=='15'

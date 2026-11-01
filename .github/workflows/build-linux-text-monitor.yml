@@ -51,6 +51,7 @@ jobs:
           run-id: ${{ inputs.build_run }}
           github-token: ${{ github.token }}
       - name: Verify source identity and prepare packages
+        id: prepare
         env:
           GH_TOKEN: ${{ github.token }}
           BUILD_RUN: ${{ inputs.build_run }}
@@ -75,7 +76,7 @@ jobs:
         if: matrix.environment == 'native'
         run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' python3 "$RUNNER_TEMP/issue3038-e2e/tools/e2e.py" "$RUNNER_TEMP/issue3038-e2e" ubuntu
       - name: Arch userspace GUI and database E2E
-        if: matrix.environment == 'native'
+        if: ${{ !cancelled() && matrix.environment == 'native' && steps.prepare.outcome == 'success' }}
         run: |
           docker build -t ow-issue3038-arch -f qa/issue-3038-ci/e2e-arch.Dockerfile .
           chmod -R a+rwX "$RUNNER_TEMP/issue3038-e2e"

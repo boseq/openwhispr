@@ -33,7 +33,7 @@ const port = Number(opts.port || 9222);
 const inspectPort = Number(opts["inspect-port"] || 9229);
 
 const getJson = (url) =>
-  fetch(url).then((res) => {
+  fetch(url, { signal: AbortSignal.timeout(5000) }).then((res) => {
     if (!res.ok) throw new Error(`${url} answered ${res.status}`);
     return res.json();
   });
@@ -41,10 +41,18 @@ const getJson = (url) =>
 async function connect(webSocketUrl) {
   const ws = new WebSocket(webSocketUrl);
   await new Promise((resolve, reject) => {
-    ws.addEventListener("open", resolve, { once: true });
-    ws.addEventListener("error", () => reject(new Error(`cannot connect to ${webSocketUrl}`)), {
-      once: true,
-    });
+    const timer = setTimeout(() => {
+      ws.close();
+      reject(new Error(`connecting to ${webSocketUrl} timed out`));
+    }, 5000);
+    ws.addEventListener("open", () => {
+      clearTimeout(timer);
+      resolve();
+    }, { once: true });
+    ws.addEventListener("error", () => {
+      clearTimeout(timer);
+      reject(new Error(`cannot connect to ${webSocketUrl}`));
+    }, { once: true });
   });
   let nextId = 1;
   const pending = new Map();

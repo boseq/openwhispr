@@ -1,64 +1,80 @@
-name: Issue 3038 native x64 startup diagnosis
+name: Issue 3038 packaged Linux E2E
 on:
   workflow_dispatch:
     inputs:
-      userspaces:
-        description: 'JSON list of userspaces to diagnose'
+      build_run:
+        description: 'Fork Build and Notarize run containing linux-build'
         required: true
-        default: '["ubuntu","arch"]'
         type: string
-      plan:
-        description: 'standard startup matrix or extended upgrade/runtime/CPU trace'
+      head_ref:
+        description: 'Exact tested source commit'
         required: true
-        default: standard
-        type: choice
-        options: [standard, extended, features]
+        type: string
 permissions:
   contents: read
+  actions: read
 jobs:
-  diagnose:
+  e2e:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
-    env:
-      PLAN: ${{ inputs.plan }}
+    timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
-        userspace: ${{ fromJSON(inputs.userspaces) }}
+        environment: [native, cpu-vm]
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.head_ref }}
+          path: head
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - name: Install diagnostic dependencies
+      - name: Install test dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y gdb xvfb xauth dbus-x11 scrot qemu-user libgtk-3-0 libnss3 libasound2t64 libgbm1 libxss1 libxshmfence1 libxkbfile1 libpulse0
-      - name: Download and verify official releases
+          sudo apt-get install -y xvfb xauth dbus-x11 scrot qemu-user qemu-system-x86 cloud-image-utils ovmf rpm2cpio cpio libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libxss1 libxshmfence1 libxkbfile1 libpulse0 libfuse2t64
+          mkdir -p "$RUNNER_TEMP/issue3038-e2e/tools" "$RUNNER_TEMP/issue3038-e2e/results"
+          cp qa/issue-3038-ci/e2e-tools/* "$RUNNER_TEMP/issue3038-e2e/tools/"
+      - uses: actions/download-artifact@v7
+        with:
+          name: linux-build
+          path: ${{ runner.temp }}/issue3038-e2e/artifacts
+          run-id: ${{ inputs.build_run }}
+          github-token: ${{ github.token }}
+      - name: Verify source identity and prepare packages
         env:
-          USERSPACE: ${{ matrix.userspace }}
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN: ${{ inputs.build_run }}
+          HEAD_REF: ${{ inputs.head_ref }}
         run: |
-          mkdir -p "$RUNNER_TEMP/issue3038"
-          formats='appimage tar'
-          if [ "$USERSPACE" = ubuntu ]; then formats='deb appimage'; fi
-          python3 qa/issue-3038-ci/tools/download.py "$RUNNER_TEMP/issue3038/downloads" $formats
-      - name: Run Ubuntu x64 comparisons and CPU probes
-        if: matrix.userspace == 'ubuntu'
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN" > "$RUNNER_TEMP/issue3038-e2e/results/build-run.json"
+          test "$(jq -r .head_sha "$RUNNER_TEMP/issue3038-e2e/results/build-run.json")" = "$HEAD_REF"
+          python3 "$RUNNER_TEMP/issue3038-e2e/tools/download.py" "$RUNNER_TEMP/issue3038-e2e/downloads" deb
+          python3 "$RUNNER_TEMP/issue3038-e2e/tools/prepare.py" "$RUNNER_TEMP/issue3038-e2e" "$RUNNER_TEMP/issue3038-e2e/artifacts"
+          cp "$RUNNER_TEMP/issue3038-e2e/package-hashes.json" "$RUNNER_TEMP/issue3038-e2e/results/"
+      - name: Exact new probe on broken base and all corrected formats
+        if: matrix.environment == 'native'
+        run: python3 "$RUNNER_TEMP/issue3038-e2e/tools/base-vs-head.py" "$RUNNER_TEMP/issue3038-e2e" "$GITHUB_WORKSPACE/head"
+      - name: Native Ubuntu GUI and database E2E
+        if: matrix.environment == 'native'
+        run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' python3 "$RUNNER_TEMP/issue3038-e2e/tools/e2e.py" "$RUNNER_TEMP/issue3038-e2e" ubuntu
+      - name: Arch userspace GUI and database E2E
+        if: matrix.environment == 'native'
         run: |
-          dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' python3 qa/issue-3038-ci/tools/run.py "$RUNNER_TEMP/issue3038" ubuntu "$PLAN"
-      - name: Run Arch x64 AppImage comparisons
-        if: matrix.userspace == 'arch'
-        run: |
-          docker build -t ow-issue3038-arch -f qa/issue-3038-ci/arch.Dockerfile .
-          docker run --rm --shm-size=2g --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
-            -v "$RUNNER_TEMP/issue3038:/qa" -v "$PWD/qa/issue-3038-ci/tools:/tools:ro" \
-            ow-issue3038-arch dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' python /tools/run.py /qa arch
-      - name: Upload text evidence and screenshots
+          docker build -t ow-issue3038-arch -f qa/issue-3038-ci/e2e-arch.Dockerfile .
+          chmod -R a+rwX "$RUNNER_TEMP/issue3038-e2e"
+          docker run --rm --shm-size=2g -v "$RUNNER_TEMP/issue3038-e2e:/qa" ow-issue3038-arch dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' python /qa/tools/e2e.py /qa arch
+      - name: Full x86 IvyBridge guest, base versus head
+        if: matrix.environment == 'cpu-vm'
+        run: python3 "$RUNNER_TEMP/issue3038-e2e/tools/full-vm.py" "$RUNNER_TEMP/issue3038-e2e"
+      - name: Upload logs and screenshots
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: issue3038-native-${{ matrix.userspace }}
-          path: ${{ runner.temp }}/issue3038/results
+          name: issue3038-e2e-${{ matrix.environment }}
+          path: ${{ runner.temp }}/issue3038-e2e/results
           retention-days: 7

@@ -10,6 +10,11 @@ on:
         description: 'Exact tested source commit'
         required: true
         type: string
+      environment:
+        description: 'Test environment to run'
+        type: choice
+        default: all
+        options: [all, native, cpu-vm]
 permissions:
   contents: read
   actions: read
@@ -20,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: [native, cpu-vm]
+        environment: ${{ fromJSON(inputs.environment == 'native' && '["native"]' || inputs.environment == 'cpu-vm' && '["cpu-vm"]' || '["native","cpu-vm"]') }}
     steps:
       - uses: actions/checkout@v7
         with:

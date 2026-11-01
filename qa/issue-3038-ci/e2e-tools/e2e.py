@@ -65,12 +65,18 @@ def trial(label, package, profile, action="seed", expect_sigill=False):
             deadline = time.monotonic() + 180
             while time.monotonic() < deadline:
                 if not expect_sigill and not updates_off and endpoint(port + 1, "/json/list"):
-                    cdp(["main", str(tools / "updates-off.js")], "updates-off.json")
-                    updates_off = True
+                    attempt = summary.get("update_attempts", 0) + 1
+                    summary["update_attempts"] = attempt
+                    try:
+                        cdp(["main", str(tools / "updates-off.js")], f"updates-off-{attempt}.json")
+                        updates_off = True
+                    except RuntimeError:
+                        # The inspector can publish a target before the app context exists.
+                        pass
                 pages = endpoint(port)
-                if pages and any("panel=true" in page.get("url", "") for page in pages):
+                if updates_off and pages and any("panel=true" in page.get("url", "") for page in pages):
                     break
-                if expect_sigill and proc.poll() is not None:
+                if proc.poll() is not None:
                     break
                 time.sleep(0.5)
             summary.update(exit_before_checks=proc.poll(), updates_disabled=updates_off)
@@ -80,17 +86,25 @@ def trial(label, package, profile, action="seed", expect_sigill=False):
                 if not summary["passed"]:
                     raise RuntimeError("Base did not terminate with SIGILL")
             else:
+                if not updates_off:
+                    raise RuntimeError("Could not disable updates in the app context")
                 if not endpoint(port):
                     raise RuntimeError("No renderer reached")
                 runtime = cdp(["main", str(tools / "runtime.js")], "runtime.json")
                 if runtime["version"] != spec["version"] or runtime["userData"] != str(profile / "data"):
                     raise RuntimeError(f"Wrong instance: {runtime}")
-                renderer = cdp(["run", "panel", str(tools / "renderer.js")], "renderer.json")
-                if not renderer.get("text", "").strip():
-                    raise RuntimeError("Empty renderer")
-                windows = cdp(["windows"], "windows.json")
-                if not any(window["visible"] and "panel=true" in window["url"] for window in windows):
-                    raise RuntimeError("Control panel window not visible")
+                deadline = time.monotonic() + 90
+                while time.monotonic() < deadline:
+                    renderer = cdp(["run", "panel", str(tools / "renderer.js")], "renderer.json")
+                    windows = cdp(["windows"], "windows.json")
+                    visible = any(window["visible"] and "panel=true" in window["url"] for window in windows)
+                    if renderer["ready"] and visible:
+                        break
+                    if proc.poll() is not None:
+                        raise RuntimeError("App exited while waiting for the welcome window")
+                    time.sleep(0.5)
+                else:
+                    raise RuntimeError("Welcome renderer and visible control panel did not become ready")
                 if action == "seed":
                     cdp(["run", "panel", str(tools / "db-seed.js")], "seed.json")
                 cdp(["run", "panel", str(tools / "db-check.js")], "database-check.json")

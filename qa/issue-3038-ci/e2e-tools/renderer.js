@@ -1,13 +1,10 @@
-(async () => {
-  const deadline = Date.now() + 30000;
-  while (!document.body?.innerText.trim() || !window.electronAPI) {
-    if (Date.now() > deadline) throw new Error("Renderer did not become ready");
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
+(() => {
+  const text = document.body?.innerText || "";
   return {
-  ready: document.readyState,
-  title: document.title,
-  text: document.body.innerText.slice(0, 1500),
-  size: { width: innerWidth, height: innerHeight },
+    ready: document.readyState === "complete" && !!window.electronAPI &&
+      text.includes("Welcome to OpenWhispr") && !!document.querySelector("button"),
+    title: document.title,
+    text: text.slice(0, 1500),
+    size: { width: innerWidth, height: innerHeight },
   };
 })()

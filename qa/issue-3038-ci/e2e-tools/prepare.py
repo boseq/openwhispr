@@ -27,6 +27,19 @@ for label, version in (("old", "1.10.4"), ("base", "1.11.0")):
                              "launcher": str((app / "open-whispr").relative_to(root)),
                              "version": version}
 
+release = json.loads((root / "downloads/1.11.0/release.json").read_text())
+asset = next(item for item in release["assets"]
+             if item["name"] == "OpenWhispr-1.11.0-linux-x86_64.AppImage")
+base_image = root / "base.AppImage"
+subprocess.run(["curl", "-fL", "--retry", "3", "--output", str(base_image),
+                asset["browser_download_url"]], check=True)
+digest = "sha256:" + hashlib.file_digest(base_image.open("rb"), "sha256").hexdigest()
+if digest != asset["digest"]:
+    raise RuntimeError("Official base AppImage checksum mismatch")
+base_image.chmod(0o755)
+(root / "results/base-appimage.json").write_text(json.dumps(
+    {"asset": asset["name"], "digest": digest, "verified": True}, indent=2))
+
 hashes = []
 for kind, pattern in (("deb", "*.deb"), ("rpm", "*.rpm"), ("tar", "*.tar.gz"),
                       ("appimage", "*.AppImage")):

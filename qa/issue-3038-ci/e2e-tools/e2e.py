@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -143,8 +144,41 @@ if mode == "cpu-vm":
     trial("head-startup", "head-deb", "head", "seed")
     trial("head-restart", "head-deb", "head", "check")
     trial("old-before-upgrade", "old-deb", "upgrade-Grüße", "seed")
+    trial("broken-deb-before-repair", "base-deb", "upgrade-Grüße", expect_sigill=True)
     trial("head-after-upgrade", "head-deb", "upgrade-Grüße", "check")
     trial("head-appimage-runtime", "head-appimage-runtime", "image", "seed")
+
+    trial("repair-old-profile", "old-deb", "repair-Grüße", "seed")
+    sentinel = scratch / mode / "repair-Grüße/data/recovery-sentinel.txt"
+    marker = "Keep profile Grüße 日本語 🧪"
+    sentinel.write_text(marker)
+    install = scratch / mode / "repair-install/OpenWhispr.AppImage"
+    install.parent.mkdir(parents=True, exist_ok=True)
+    specs["repair-appimage"] = {**specs["head-appimage-runtime"], "launcher": str(install)}
+    base_hash = json.loads((root / "results/base-appimage.json").read_text())["digest"].split(":", 1)[1]
+    head_hash = next(item["archive_sha256"] for item in json.loads(
+        (root / "package-hashes.json").read_text()) if item["format"] == "appimage")
+    replacements = []
+    for label, source, expected, broken in (
+        ("repair-broken-appimage", root / "base.AppImage", base_hash, True),
+        ("repair-fixed-appimage", root / "head.AppImage", head_hash, False),
+    ):
+        pending = install.with_suffix(".pending")
+        shutil.copyfile(source, pending)
+        actual = hashlib.file_digest(pending.open("rb"), "sha256").hexdigest()
+        if actual != expected:
+            raise RuntimeError(f"Recovery AppImage checksum mismatch: {label}")
+        pending.chmod(0o755)
+        os.replace(pending, install)
+        replacements.append({"label": label, "source": str(source), "installed": str(install),
+                             "sha256": actual, "profile_marker_preserved": sentinel.read_text() == marker})
+        if not replacements[-1]["profile_marker_preserved"]:
+            raise RuntimeError("Recovery replacement changed the profile sentinel")
+        (out / "appimage-replacement.json").write_text(json.dumps(replacements, indent=2))
+        trial(label, "repair-appimage", "repair-Grüße", "check", expect_sigill=broken)
+    trial("repair-fixed-restart", "repair-appimage", "repair-Grüße", "check")
+    if sentinel.read_text() != marker:
+        raise RuntimeError("Recovery did not preserve the profile sentinel")
 else:
     trial("base-startup", "base-deb", "base", "seed")
     for kind in ("deb", "rpm", "tar", "appimage"):

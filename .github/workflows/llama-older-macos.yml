@@ -1,0 +1,108 @@
+name: llama-server on older macOS (OpenWhispr #2943 / PR #3238)
+
+# Throwaway check: runs the bundled llama-server from main (b9763) and from PR #3238 (b12110),
+# each downloaded by its own tree's download script, with the app's own arguments and a real model.
+on:
+  push:
+    branches: [ci/llama-older-macos]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  serve:
+    name: ${{ matrix.os }} / ${{ matrix.side }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+        side: [base, head]
+        include:
+          - side: base
+            repo: OpenWhispr/openwhispr
+            ref: ce68e09ed9c9bd7f355dea20cdad4366dd02a906
+          - side: head
+            repo: boseq/openwhispr
+            ref: 27650aa01158765d679c9edad497063a5cab6172
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repo }}
+          ref: ${{ matrix.ref }}
+          path: tree
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Machine
+        run: |
+          sw_vers
+          uname -m
+          system_profiler SPDisplaysDataType | sed -n '1,25p'
+
+      - name: Download llama-server with the tree's own script
+        working-directory: tree
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/download-llama-server.js --current
+
+      - name: Binary
+        id: bin
+        run: |
+          ARCH=$(node -p process.arch)
+          BIN="$PWD/tree/resources/bin/llama-server-darwin-$ARCH"
+          echo "path=$BIN" >> "$GITHUB_OUTPUT"
+          otool -l "$BIN" | grep -A4 LC_BUILD_VERSION
+          nm -m "$(ls "$PWD"/tree/resources/bin/libggml-metal.0.*.dylib 2>/dev/null | head -1)" 2>/dev/null | grep MTLResidencySetDescriptor || echo "no libggml-metal (x64 build has Metal off)"
+
+      - name: llama-server --version
+        continue-on-error: true
+        env:
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/tree/resources/bin
+        run: |
+          set +e
+          "${{ steps.bin.outputs.path }}" --version
+          echo "exit=$?"
+
+      - name: Model (the app's Qwen 3.5 2B)
+        run: curl -sSL --retry 3 -o model.gguf https://huggingface.co/bartowski/Qwen_Qwen3.5-2B-GGUF/resolve/main/Qwen_Qwen3.5-2B-Q4_K_M.gguf && ls -l model.gguf
+
+      - name: Serve with the app's arguments and answer a cleanup request
+        env:
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/tree/resources/bin
+          LLAMA_ARG_FIT: "off"
+        run: |
+          set +e
+          "${{ steps.bin.outputs.path }}" --model model.gguf --host 127.0.0.1 --port 8221 --threads 4 \
+            --ctx-size 16384 --jinja --n-gpu-layers 99 > server.log 2>&1 &
+          PID=$!
+          ready=no
+          for i in $(seq 1 180); do
+            if ! kill -0 $PID 2>/dev/null; then wait $PID; echo "server exited early, status $?"; break; fi
+            if curl -sf http://127.0.0.1:8221/health > /dev/null; then ready=yes; echo "ready after ${i}s"; break; fi
+            sleep 1
+          done
+          answer=""
+          if [ "$ready" = yes ]; then
+            answer=$(curl -s http://127.0.0.1:8221/v1/chat/completions -H 'Content-Type: application/json' -d '{
+              "messages":[{"role":"system","content":"You clean up dictated text. Fix punctuation and capitalization, remove filler words, and return only the cleaned text."},
+                          {"role":"user","content":"um so i think we should uh move the meeting to thursday at three and invite priya"}],
+              "temperature":0.2,"max_tokens":256,"stream":false,"chat_template_kwargs":{"enable_thinking":false}}' \
+              | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).choices[0].message.content)}catch(e){console.log("unparsable: "+s.slice(0,300))}})')
+          fi
+          kill $PID 2>/dev/null
+          echo "--- server log (Metal, device, errors) ---"
+          grep -iE 'dyld|symbol not found|metal|device|error|failed|system_info|offload|build' server.log | head -60
+          echo "--- answer ---"
+          echo "${answer:-<none>}"
+          {
+            echo "### ${{ matrix.os }} / ${{ matrix.side }}"
+            echo "- macOS $(sw_vers -productVersion) $(uname -m)"
+            echo "- ready: $ready"
+            echo "- answer: ${answer:-none}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$ready" = yes ] && [ -n "$answer" ]
